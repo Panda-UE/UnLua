@@ -83,27 +83,17 @@ int32 UObject_Load(lua_State *L)
  */
 static int32 UObject_IsValid(lua_State *L)
 {
-    int32 NumParams = lua_gettop(L);
-    bool bValid = false;
+    const int32 NumParams = lua_gettop(L);
     if (NumParams != 1)
     {
-        UE_LOG(LogUnLua, Log, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        UE_LOG(LogUnLua, Error, TEXT("%s: Invalid parameters!"), ANSI_TO_TCHAR(__FUNCTION__));
+        return 0;
     }
-    else
-    {
-        UObject* Object = UnLua::GetUObject(L, 1);
-        if (!Object)
-        {
-            UE_LOG(LogUnLua, Log, TEXT("%s: Invalid object!"), ANSI_TO_TCHAR(__FUNCTION__));
-        }
-        else
-        {
-            bValid = GLuaCxt->IsUObjectValid(Object);
-        }
-    }
-
+    
+    UObject* Object = UnLua::GetUObject(L, 1);
+    const bool bValid = GLuaCxt->IsUObjectValid(Object) && IsValid(Object);
     lua_pushboolean(L, bValid);
-    return bValid ? 1 : 0;
+    return 1;
 }
 
 /**
@@ -253,10 +243,8 @@ static int32 UObject_Release(lua_State *L)
     if (LUA_TTABLE == lua_type(L, -1))
     {
         UObject* Object = UnLua::GetUObject(L, -1);
-        if (GLuaCxt->IsUObjectValid(Object))
-        {
+        if (Object)
             GLuaCxt->GetManager()->ReleaseAttachedObjectLuaRef(Object);
-        }
     }
 
     return 0;
@@ -307,9 +295,22 @@ int32 UObject_Delete(lua_State *L)
         FClassDesc* ClassDesc = (FClassDesc*)Userdata;
 
         lua_pushstring(L, "__name");
-        int32 Type = lua_rawget(L, 1);
+        lua_rawget(L, 1);
         FString MetaTableName = UTF8_TO_TCHAR(lua_tostring(L, -1));
-        lua_pop(L, 1);
+        luaL_getmetatable(L, lua_tostring(L, -1));
+        int Type = lua_type(L, -1);
+        if (Type == LUA_TTABLE)
+        {
+            // https://github.com/Tencent/UnLua/issues/367
+            FClassDesc* CurrentClassDesc = (FClassDesc*)GetUserdata(L, -1);
+            lua_pop(L, 2);
+            if (CurrentClassDesc == ClassDesc)
+                return 0;
+        }
+        else
+        {
+            lua_pop(L, 2);
+        }
 
         if (GReflectionRegistry.IsDescValid(ClassDesc, DESC_CLASS)
             && ClassDesc->GetName().Equals(MetaTableName))
@@ -404,6 +405,8 @@ BEGIN_EXPORT_CLASS(FSoftObjectPtr, const UObject*)
     ADD_CONST_FUNCTION_EX("IsValid", bool, IsValid)
     ADD_FUNCTION_EX("Reset", void, Reset)
     ADD_FUNCTION_EX("Set", void, operator=, const UObject*)
+    ADD_FUNCTION_EX("GetAssetName", FString, GetAssetName)
+    ADD_FUNCTION_EX("GetLongPackageName", FString, GetLongPackageName)
     ADD_CONST_FUNCTION_EX("Get", UObject*, Get)
     ADD_LIB(FSoftObjectPtrLib)
 END_EXPORT_CLASS()

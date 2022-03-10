@@ -39,7 +39,7 @@ FPropertyDesc::~FPropertyDesc()
 
 bool FPropertyDesc::IsValid() const
 {
-#if ENGINE_MINOR_VERSION < 25
+#if ENGINE_MAJOR_VERSION <= 4 && ENGINE_MINOR_VERSION < 25
     return GLuaCxt->IsUObjectValid(Property);
 #else
     bool bValid = false;
@@ -360,15 +360,17 @@ public:
             ObjectBaseProperty->SetObjectPropertyValue(ValuePtr, Value);
         }
         else
-        {   
+        {
             UObject* Object = UnLua::GetUObject(L, IndexInStack);
+#if ENABLE_TYPE_CHECK == 1
             if (Object)
             {
                 if (!Object->GetClass()->IsChildOf(ObjectBaseProperty->PropertyClass))
                 {
-                    Object = nullptr;
+                    UNLUA_LOGERROR(L, LogUnLua, Warning, TEXT("Invalid value type : property.type=%s, value.type=%s"), *ObjectBaseProperty->PropertyClass->GetName(), *Object->GetClass()->GetName());
                 }
             }
+#endif
             ObjectBaseProperty->SetObjectPropertyValue(ValuePtr, Object);
         }
         return true;
@@ -497,7 +499,7 @@ public:
         {
             if (Type != LUA_TUSERDATA)
             {
-                ErrorMsg = FString::Printf(TEXT("userdata is needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, IndexInStack)));
+                ErrorMsg = FString::Printf(TEXT("userdata is needed but got %s"), UTF8_TO_TCHAR(lua_typename(L, Type)));
                 return false;
             }
 
@@ -1601,7 +1603,7 @@ FPropertyDesc* FPropertyDesc::Create(FProperty *InProperty)
             PropertyDesc = new TMulticastDelegatePropertyDesc<FMulticastScriptDelegate>(InProperty);
             break;
         }
-#if ENGINE_MINOR_VERSION > 22
+#if ENGINE_MAJOR_VERSION > 4 || (ENGINE_MAJOR_VERSION == 4 && ENGINE_MINOR_VERSION > 22)
     case CPT_MulticastSparseDelegate:
         {
             PropertyDesc = new TMulticastDelegatePropertyDesc<FSparseDelegate>(InProperty);
@@ -1727,7 +1729,7 @@ int32 GetPropertyType(const FProperty *Property)
         {
             Type = CPT_Delegate;
         }
-#if ENGINE_MINOR_VERSION < 23
+#if ENGINE_MAJOR_VERSION <= 4 && ENGINE_MINOR_VERSION < 23
         else if (const FMulticastDelegateProperty *TempMulticastDelegateProperty = CastField<FMulticastDelegateProperty>(Property))
         {
             Type = CPT_MulticastDelegate;

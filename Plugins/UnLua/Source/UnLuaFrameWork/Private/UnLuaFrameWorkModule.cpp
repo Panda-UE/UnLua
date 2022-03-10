@@ -21,6 +21,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #elif PLATFORM_WINDOWS
+#include "Windows/PreWindowsApi.h"
 #include <Windows.h>
 #ifdef min
 #undef min
@@ -28,6 +29,7 @@
 #ifdef max
 #undef max
 #endif
+#include "Windows/PostWindowsApi.h"
 #endif
 
 #define LOCTEXT_NAMESPACE "UnLuaFrameWorkModule"
@@ -369,6 +371,7 @@ int32 Global_UEPrint(lua_State *L)
 
 void UnLuaFrame_OnLuaStateCreate(lua_State* L)
 {
+#if UNLUA_ENABLE_AUTO_HOTFIX
 	UnLua::FAutoStack StackKeeper;
 
 	UnLua::RegisteG6Evn(L);
@@ -381,6 +384,7 @@ void UnLuaFrame_OnLuaStateCreate(lua_State* L)
 	{
 		UE_LOG(LogTemp, Log, TEXT("G6HotfixHelper Loaded failed"));
 	}
+#endif
 }
 
 void UnLuaFrame_OnLuaStateDestroy(bool bFullClean)
@@ -414,15 +418,34 @@ void UnLuaFrameWorkModule::StartupModule()
 {
 	FUnLuaDelegates::OnLuaStateCreated.AddStatic(&UnLuaFrame_OnLuaStateCreate);
 	FUnLuaDelegates::OnPreLuaContextCleanup.AddStatic(&UnLuaFrame_OnLuaStateDestroy);
-	//FUnLuaDelegates::OnObjectBinded.AddStatic(&UnLuaFrame_OnObjectBinded);
-	//FUnLuaDelegates::OnObjectUnbinded.AddStatic(&UnLuaFrame_OnObjectUnbinded);
+	
+#if UNLUA_ENABLE_AUTO_HOTFIX
+	TickDelegate = FTickerDelegate::CreateRaw(this, &UnLuaFrameWorkModule::Tick);
+	TickDelegateHandle = FTicker::GetCoreTicker().AddTicker(TickDelegate);
+#endif
 }
 
 void UnLuaFrameWorkModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
+
+#if UNLUA_ENABLE_AUTO_HOTFIX
+	FTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
+#endif
 }
+
+#if UNLUA_ENABLE_AUTO_HOTFIX
+bool UnLuaFrameWorkModule::Tick(float DeltaTime)
+{
+	lua_State* L = UnLua::GetState();
+	if (L)
+	{
+		UnLua::Call(L, "HotFix", true);
+	}
+	return true;
+}
+#endif
 
 namespace UnLua
 {
